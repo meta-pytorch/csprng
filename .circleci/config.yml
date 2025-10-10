@@ -25,12 +25,12 @@ commands:
   #           set -ex
   #           BRANCH=$(git rev-parse --abbrev-ref HEAD)
   #           if [[ "$BRANCH" != "master" ]]; then
-  #             git fetch --force origin ${CIRCLE_BRANCH}/merge:mBRANCH}
+  #             git fetch --force origin ${CIRCLE_BRANCH}/merge:merged/${CIRCLE_BRANCH}
   #             git checkout "merged/$CIRCLE_BRANCH"
   #           fi
 
   designate_upload_channel:
-    description: "inserts the correct upload channel into ${BASH_
+    description: "inserts the correct upload channel into ${BASH_ENV}"
     steps:
       - run:
           name: adding UPLOAD_CHANNEL to BASH_ENV
@@ -40,17 +40,17 @@ commands:
             if [[ -n "${CIRCLE_TAG}" ]]; then
               our_upload_channel=test
             fi
-            echo "export UPLOAD_CHANNEL=${our_upload_channel}" >>
+            echo "export UPLOAD_CHANNEL=${our_upload_channel}" >> ${BASH_ENV}
 
 binary_common: &binary_common
   parameters:
     # Edit these defaults to do a release`
     build_version:
-      description: "version number of release binary; by default,y"
+      description: "version number of release binary; by default, build a nightly"
       type: string
       default: ""
     pytorch_version:
-      description: "PyTorch version to build against; by default,
+      description: "PyTorch version to build against; by default, use a nightly"
       type: string
       default: ""
     # Don't edit these
@@ -58,10 +58,10 @@ binary_common: &binary_common
       description: "Python version to build against (e.g., 3.7)"
       type: string
     cu_version:
-      description: "CUDA version to build against, in CU format (100)"
+      description: "CUDA version to build against, in CU format (e.g., cpu or cu100)"
       type: string
     unicode_abi:
-      description: "Python 2.7 wheel only: whether or not we are : no)"
+      description: "Python 2.7 wheel only: whether or not we are cp27mu (default: no)"
       type: string
       default: ""
     wheel_docker_image:
@@ -120,13 +120,13 @@ jobs:
           no_output_timeout: 20m
           command: |
             set -ex
-            source packaging/windows/internal/vc_install_helper.s
+            source packaging/windows/internal/vc_install_helper.sh
             packaging/windows/internal/cuda_install.bat
-            eval "$('/C/tools/miniconda3/Scripts/conda.exe' 'shel"
+            eval "$('/C/tools/miniconda3/Scripts/conda.exe' 'shell.bash' 'hook')"
             conda activate base
-            conda install -yq conda-build "conda-package-handling
+            conda install -yq conda-build "conda-package-handling!=1.5.0"
             packaging/build_conda.sh
-            rm /C/tools/miniconda3/conda-bld/win-64/vs${VC_YEAR}*
+            rm /C/tools/miniconda3/conda-bld/win-64/vs${VC_YEAR}*.tar.bz2
       - store_artifacts:
           path: C:/tools/miniconda3/conda-bld/win-64
       - persist_to_workspace:
@@ -145,7 +145,7 @@ jobs:
           name: Build wheel packages
           command: |
             set -ex
-            source packaging/windows/internal/vc_install_helper.s
+            source packaging/windows/internal/vc_install_helper.sh
             packaging/windows/internal/cuda_install.bat
             packaging/build_wheel.sh
       - store_artifacts:
@@ -169,10 +169,10 @@ jobs:
 #          # Disable brew auto update which is very slow
       - run:
           # Cannot easily deduplicate this as source'ing activate
-          # will set environment variables which we need to propa
+          # will set environment variables which we need to propagate
           # to build_wheel.sh
           command: |
-            curl -o conda.sh https://repo.anaconda.com/miniconda/st-MacOSX-x86_64.sh
+            curl -o conda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
             sh conda.sh -b
             source $HOME/miniconda3/bin/activate
             packaging/build_wheel.sh
@@ -195,7 +195,7 @@ jobs:
 #          # Disable brew auto update which is very slow
       - run:
           command: |
-            curl -o conda.sh https://repo.anaconda.com/miniconda/st-MacOSX-x86_64.sh
+            curl -o conda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
             sh conda.sh -b
             source $HOME/miniconda3/bin/activate
             conda install -yq conda-build
@@ -222,12 +222,12 @@ jobs:
             # Prevent credential from leaking
             conda install -yq anaconda-client
             set -x
-            anaconda  -t "${CONDA_PYTORCHBOT_TOKEN}" upload ~/wor2 -u "pytorch-${UPLOAD_CHANNEL}" --label main --no-progress --for
+            anaconda  -t "${CONDA_PYTORCHBOT_TOKEN}" upload ~/workspace/*.tar.bz2 -u "pytorch-${UPLOAD_CHANNEL}" --label main --no-progress --force
   # Requires org-member context
   binary_wheel_upload:
     parameters:
       subfolder:
-        description: "What whl subfolder to upload to, e.g., blanailing slash is important)"
+        description: "What whl subfolder to upload to, e.g., blank or cu100/ (trailing slash is important)"
         type: string
     docker:
       - image: circleci/python:3.7
@@ -242,11 +242,11 @@ jobs:
             export PATH="$HOME/.local/bin:$PATH"
             # Prevent credential from leaking
             set +x
-            export AWS_ACCESS_KEY_ID="${PYTORCH_BINARY_AWS_ACCESS}"
-            export AWS_SECRET_ACCESS_KEY="${PYTORCH_BINARY_AWS_SE}"
+            export AWS_ACCESS_KEY_ID="${PYTORCH_BINARY_AWS_ACCESS_KEY_ID}"
+            export AWS_SECRET_ACCESS_KEY="${PYTORCH_BINARY_AWS_SECRET_ACCESS_KEY}"
             set -x
             for pkg in ~/workspace/*.whl; do
-              aws s3 cp "$pkg" "s3://pytorch/whl/${UPLOAD_CHANNEL.subfolder >>" --acl public-read
+              aws s3 cp "$pkg" "s3://pytorch/whl/${UPLOAD_CHANNEL}/<< parameters.subfolder >>" --acl public-read
             done
 
   unittest_linux_cpu:
@@ -258,19 +258,19 @@ jobs:
       - checkout
       - run:
           name: Generate cache key
-          # This will refresh cache on Sundays, nightly build show cache.
+          # This will refresh cache on Sundays, nightly build should generate new cache.
           command: echo "$(date +"%Y-%U")" > .circleci-weekly
       - restore_cache:
 
           keys:
-            - env-v2-linux-{{ arch }}-py<< parameters.python_verssum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ chec-weekly" }}
+            - env-v2-linux-{{ arch }}-py<< parameters.python_version >>-{{ checksum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ checksum ".circleci-weekly" }}
 
       - run:
           name: Setup
           command: .circleci/unittest/linux/scripts/setup_env.sh
       - save_cache:
 
-          key: env-v2-linux-{{ arch }}-py<< parameters.python_verksum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ chei-weekly" }}
+          key: env-v2-linux-{{ arch }}-py<< parameters.python_version >>-{{ checksum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ checksum ".circleci-weekly" }}
 
           paths:
             - conda
@@ -283,7 +283,7 @@ jobs:
           command: .circleci/unittest/linux/scripts/run_test.sh
       - run:
           name: Post process
-          command: .circleci/unittest/linux/scripts/post_process.
+          command: .circleci/unittest/linux/scripts/post_process.sh
       - store_test_results:
           path: test-results
 
@@ -299,32 +299,32 @@ jobs:
       - checkout
       - run:
           name: Generate cache key
-          # This will refresh cache on Sundays, nightly build show cache.
+          # This will refresh cache on Sundays, nightly build should generate new cache.
           command: echo "$(date +"%Y-%U")" > .circleci-weekly
       - restore_cache:
 
           keys:
-            - env-v2-linux-{{ arch }}-py<< parameters.python_verssum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ chec-weekly" }}
+            - env-v2-linux-{{ arch }}-py<< parameters.python_version >>-{{ checksum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ checksum ".circleci-weekly" }}
 
       - run:
           name: Setup
-          command: docker run -e PYTHON_VERSION -t --gpus all -v WD "${image_name}" .circleci/unittest/linux/scripts/setup_env.sh
+          command: docker run -e PYTHON_VERSION -t --gpus all -v $PWD:$PWD -w $PWD "${image_name}" .circleci/unittest/linux/scripts/setup_env.sh
       - save_cache:
 
-          key: env-v2-linux-{{ arch }}-py<< parameters.python_verksum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ chei-weekly" }}
+          key: env-v2-linux-{{ arch }}-py<< parameters.python_version >>-{{ checksum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ checksum ".circleci-weekly" }}
 
           paths:
             - conda
             - env
       - run:
           name: Install torchcsprng
-          command: docker run -t --gpus all -v $PWD:$PWD -w $PWD  .circleci/unittest/linux/scripts/install.sh
+          command: docker run -t --gpus all -v $PWD:$PWD -w $PWD "${image_name}" .circleci/unittest/linux/scripts/install.sh
       - run:
           name: Run tests
-          command: docker run -t --gpus all -v $PWD:$PWD -w $PWD  .circleci/unittest/linux/scripts/run_test.sh
+          command: docker run -t --gpus all -v $PWD:$PWD -w $PWD "${image_name}" .circleci/unittest/linux/scripts/run_test.sh
       - run:
           name: Post Process
-          command: docker run -t --gpus all -v $PWD:$PWD -w $PWD  .circleci/unittest/linux/scripts/post_process.sh
+          command: docker run -t --gpus all -v $PWD:$PWD -w $PWD "${image_name}" .circleci/unittest/linux/scripts/post_process.sh
       - store_test_results:
           path: test-results
 
@@ -336,19 +336,19 @@ jobs:
       - checkout
       - run:
           name: Generate cache key
-          # This will refresh cache on Sundays, nightly build show cache.
+          # This will refresh cache on Sundays, nightly build should generate new cache.
           command: echo "$(date +"%Y-%U")" > .circleci-weekly
       - restore_cache:
 
           keys:
-            - env-v2-windows-{{ arch }}-py<< parameters.python_vecksum ".circleci/unittest/windows/scripts/environment.yml" }}-{{ leci-weekly" }}
+            - env-v2-windows-{{ arch }}-py<< parameters.python_version >>-{{ checksum ".circleci/unittest/windows/scripts/environment.yml" }}-{{ checksum ".circleci-weekly" }}
 
       - run:
           name: Setup
-          command: .circleci/unittest/windows/scripts/setup_env.s
+          command: .circleci/unittest/windows/scripts/setup_env.sh
       - save_cache:
 
-          key: env-v2-windows-{{ arch }}-py<< parameters.python_vecksum ".circleci/unittest/windows/scripts/environment.yml" }}-{{cleci-weekly" }}
+          key: env-v2-windows-{{ arch }}-py<< parameters.python_version >>-{{ checksum ".circleci/unittest/windows/scripts/environment.yml" }}-{{ checksum ".circleci-weekly" }}
 
           paths:
             - conda
@@ -361,7 +361,7 @@ jobs:
           command: .circleci/unittest/windows/scripts/run_test.sh
       - run:
           name: Post process
-          command: .circleci/unittest/windows/scripts/post_proces
+          command: .circleci/unittest/windows/scripts/post_process.sh
       - store_test_results:
           path: test-results
 
@@ -376,19 +376,19 @@ jobs:
       - checkout
       - run:
           name: Generate cache key
-          # This will refresh cache on Sundays, nightly build show cache.
+          # This will refresh cache on Sundays, nightly build should generate new cache.
           command: echo "$(date +"%Y-%U")" > .circleci-weekly
       - restore_cache:
 
           keys:
-            - env-v1-windows-{{ arch }}-py<< parameters.python_vecksum ".circleci/unittest/windows/scripts/environment.yml" }}-{{ leci-weekly" }}
+            - env-v1-windows-{{ arch }}-py<< parameters.python_version >>-{{ checksum ".circleci/unittest/windows/scripts/environment.yml" }}-{{ checksum ".circleci-weekly" }}
 
       - run:
           name: Setup
-          command: .circleci/unittest/windows/scripts/setup_env.s
+          command: .circleci/unittest/windows/scripts/setup_env.sh
       - save_cache:
 
-          key: env-v1-windows-{{ arch }}-py<< parameters.python_vecksum ".circleci/unittest/windows/scripts/environment.yml" }}-{{cleci-weekly" }}
+          key: env-v1-windows-{{ arch }}-py<< parameters.python_version >>-{{ checksum ".circleci/unittest/windows/scripts/environment.yml" }}-{{ checksum ".circleci-weekly" }}
 
           paths:
             - conda
@@ -401,7 +401,7 @@ jobs:
           command: .circleci/unittest/windows/scripts/run_test.sh
       - run:
           name: Post process
-          command: .circleci/unittest/windows/scripts/post_proces
+          command: .circleci/unittest/windows/scripts/post_process.sh
       - store_test_results:
           path: test-results
 
@@ -423,19 +423,19 @@ jobs:
 #          # Disable brew auto update which is very slow
       - run:
           name: Generate cache key
-          # This will refresh cache on Sundays, nightly build show cache.
+          # This will refresh cache on Sundays, nightly build should generate new cache.
           command: echo "$(date +"%Y-%U")" > .circleci-weekly
       - restore_cache:
 
           keys:
-            - env-v3-macos-{{ arch }}-py<< parameters.python_verssum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ chec-weekly" }}
+            - env-v3-macos-{{ arch }}-py<< parameters.python_version >>-{{ checksum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ checksum ".circleci-weekly" }}
 
       - run:
           name: Setup
           command: .circleci/unittest/linux/scripts/setup_env.sh
       - save_cache:
 
-          key: env-v3-macos-{{ arch }}-py<< parameters.python_verksum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ chei-weekly" }}
+          key: env-v3-macos-{{ arch }}-py<< parameters.python_version >>-{{ checksum ".circleci/unittest/linux/scripts/environment.yml" }}-{{ checksum ".circleci-weekly" }}
 
           paths:
             - conda
@@ -448,7 +448,7 @@ jobs:
           command: .circleci/unittest/linux/scripts/run_test.sh
       - run:
           name: Post process
-          command: .circleci/unittest/linux/scripts/post_process.
+          command: .circleci/unittest/linux/scripts/post_process.sh
       - store_test_results:
           path: test-results
 
