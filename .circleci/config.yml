@@ -455,7 +455,7 @@ jobs:
 workflows:
   build:
     jobs:
-#    - circleci_consistency
+#     - circleci_consistency
       - binary_linux_wheel:
           cu_version: cpu
           name: binary_linux_wheel_py3.6_cpu
@@ -900,9 +900,9 @@ workflows:
           name: binary_win_conda_py3.9_cu111
           python_version: '3.9'
 
-#    - python_lint
-#    - python_type_check
-#    - clang_format
+#     - python_lint
+#     - python_type_check
+#     - clang_format
 
   unittest:
     jobs:

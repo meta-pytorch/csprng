@@ -455,11 +455,11 @@ jobs:
 workflows:
   build:
     jobs:
-#    - circleci_consistency
+#     - circleci_consistency
 {{ build_workflows() }}
-#    - python_lint
-#    - python_type_check
-#    - clang_format
+#     - python_lint
+#     - python_type_check
+#     - clang_format
 
   unittest:
     jobs:
