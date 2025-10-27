@@ -356,7 +356,7 @@ void block_cipher(at::Tensor input, at::Tensor output, cipher_t cipher) {
       device,
       cipher,
       block_size / output_type_size,
-      [] TORCH_CSPRNG_HOST_DEVICE(uint8_t * x) {});
+      [] TORCH_CSPRNG_HOST_DEVICE(uint8_t* x) {});
 }
 
 } // namespace csprng
