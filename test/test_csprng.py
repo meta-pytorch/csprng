@@ -452,7 +452,10 @@ class TestCSPRNG(unittest.TestCase):
         time_for_1K = measure(1000)
         time_for_1M = measure(1000000)
         # Pessimistic check that parallel execution gives >= 1.5 performance boost
-        self.assertTrue(time_for_1M / time_for_1K < 1000 / 1.5)
+        # Ensure we never divide by zero if torch reports 0 threads.
+        threads = torch.get_num_threads()
+        denom = min(1.5, max(1.0, float(threads)))
+        self.assertTrue(time_for_1M / time_for_1K < 1000 / denom)
 
     @unittest.skipIf(IS_SANDCASTLE or IS_FBCODE, "Does not work on Sandcastle")
     def test_version(self):
