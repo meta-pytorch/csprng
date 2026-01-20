@@ -443,19 +443,16 @@ class TestCSPRNG(unittest.TestCase):
 
         def measure(size):
             t = torch.empty(size, dtype=torch.float32, device="cpu")
-            start = time.time()
+            start = time.perf_counter()
             for i in range(20):
                 t.normal_(generator=urandom_gen)
-            finish = time.time()
-            return finish - start
+            finish = time.perf_counter()
+            return max(finish - start, 1e-9)  # Ensure never exactly zero
 
         time_for_1K = measure(1000)
         time_for_1M = measure(1000000)
         # Pessimistic check that parallel execution gives >= 1.5 performance boost
-        # Ensure we never divide by zero if torch reports 0 threads.
-        threads = torch.get_num_threads()
-        denom = min(1.5, max(1.0, float(threads)))
-        self.assertTrue(time_for_1M / time_for_1K < 1000 / denom)
+        self.assertTrue(time_for_1M / time_for_1K < 1000 / min(1.5, torch.get_num_threads()))
 
     @unittest.skipIf(IS_SANDCASTLE or IS_FBCODE, "Does not work on Sandcastle")
     def test_version(self):
