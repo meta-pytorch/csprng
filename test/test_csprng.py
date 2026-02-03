@@ -401,7 +401,7 @@ class TestCSPRNG(unittest.TestCase):
         size = 10
         for device in self.all_devices:
             for dtype in self.all_dtypes:
-                for i in range(10):
+                for _i in range(10):
                     t = torch.zeros([size, size, size], dtype=dtype, device=device)
                     x1 = random.randrange(0, size)
                     y1 = random.randrange(0, size)
@@ -444,7 +444,7 @@ class TestCSPRNG(unittest.TestCase):
         def measure(size):
             t = torch.empty(size, dtype=torch.float32, device="cpu")
             start = time.time()
-            for i in range(20):
+            for _i in range(20):
                 t.normal_(generator=urandom_gen)
             finish = time.time()
             return finish - start
