@@ -46,7 +46,7 @@ struct CSPRNGGeneratorImpl : public c10::GeneratorImpl {
                    : make64BitsFrom32Bits(mt_(), mt_());
   }
 
-  void set_current_seed(uint64_t seed) override {
+  void set_current_seed(uint64_t /* seed */) override {
     throw std::runtime_error("not implemented");
   }
   uint64_t current_seed() const override {
