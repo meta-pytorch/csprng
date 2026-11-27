@@ -376,10 +376,31 @@ class TestCSPRNG(unittest.TestCase):
                         t = torch.empty(
                             self.size, dtype=dtype, device=device
                         ).geometric_(p=p, generator=gen)
-                        # actual = np.histogram(t.cpu().to(torch.double), np.arange(1, 100))[0]
-                        # expected = stats.geom(p).pmf(np.arange(1, 99)) * self.size
-                        # res = stats.chisquare(actual, expected)
-                        # self.assertAlmostEqual(res.pvalue, 1.0, delta=0.5) TODO https://github.com/pytorch/csprng/issues/7
+                        if dtype not in self.standard_fp_dtypes:
+                            continue
+                        # Chi-square goodness of fit against stats.geom(p) on a larger
+                        # sample. Bins are 1, 2, ..., k - 1 and a tail bin ">= k", with k
+                        # chosen so that the tail bin expects at least 5 samples (the last
+                        # few single-value bins can expect fewer, down to about 1 for
+                        # p = 0.2, which chi-square tolerates). A p-value
+                        # under 1e-6 fails: that is far below the chance of a false
+                        # failure for the unseeded generators, while a wrong
+                        # distribution gives a p-value near 0 at this sample size.
+                        n = 20000
+                        t = torch.empty(n, dtype=dtype, device=device).geometric_(
+                            p=p, generator=gen
+                        )
+                        values = t.cpu().to(torch.double).numpy()
+                        self.assertTrue(np.all(values >= 1))
+                        self.assertTrue(np.all(values == np.floor(values)))
+                        k = int(stats.geom(p).isf(5.0 / n))
+                        probs = stats.geom(p).pmf(np.arange(1, k))
+                        probs = np.append(probs, 1.0 - probs.sum())
+                        actual = np.bincount(
+                            np.minimum(values, k).astype(np.int64) - 1, minlength=k
+                        )
+                        res = stats.chisquare(actual, probs * n)
+                        self.assertGreater(res.pvalue, 1e-6)
 
     @unittest.skipIf(no_cuda, no_cuda_message)
     def test_geometric_cpu_vs_cuda(self):
